@@ -2,14 +2,20 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
+#include <sys/wait.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include "smallsh-u.h"
+
+extern int bg_permitted;
 
 int parse_input(struct command_data *data)
 {
 	int i;
 	data->fg = 1;
-	data->input_file = "/dev/null";
-	data->output_file = "/dev/null";
+	data->input_file = NULL;
+	data->output_file = NULL;
 	//We'll check to make sure we weren't passed a null pointer.
 	if (!data->input_buffer)
 	{
@@ -92,4 +98,58 @@ int parse_input(struct command_data *data)
 	}
 
 	return 0;
+}
+
+void redirect_in(const char* source)
+{
+	int in_descriptor = open(source, O_RDONLY);
+	if (in_descriptor == -1)
+	{
+		fprintf(stderr, "Could not redirect input from file %s.\n",
+				source);
+		perror("");
+		exit(1);
+	}
+	dup2(in_descriptor, STDIN_FILENO);
+}
+
+void redirect_out(const char* dest)
+{
+	int out_descriptor = open(dest, O_WRONLY);
+	if (out_descriptor == -2)
+	{
+		fprintf(stderr, "Could not redirect output to file %s.\n",
+				dest);
+		perror("");
+		exit(1);
+	}
+	dup2(out_descriptor, STDOUT_FILENO);
+}
+
+void spawn_fg(struct command_data *data)
+{
+	int fork_ret = fork();
+	int return_info;
+	
+	switch (fork_ret)
+	{
+		case -1:
+			perror("Forking failed");
+			break;
+		case 0:
+			if (data->input_file)
+				redirect_in(data->input_file);
+			if (data->output_file)
+				redirect_out(data->output_file);
+			//The actual execution!
+			execvp(data->arg_list[0], data->arg_list);
+			fprintf(stderr, "Execution failed!\n");
+			exit(1);
+			break;
+		default:
+			waitpid(fork_ret, &return_info, 0);
+			break;
+	}
+
+
 }

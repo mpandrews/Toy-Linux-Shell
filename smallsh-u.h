@@ -19,4 +19,6 @@ struct bg_children
 
 int parse_input(struct command_data*);
 
+void spawn_fg(struct command_data*);
+
 #endif

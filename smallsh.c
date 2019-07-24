@@ -9,7 +9,6 @@
 #include "smallsh-u.h"
 
 #define MAX_INPUT_SIZE 2048
-#define MAX_COMMAND_ARGS 512
 
 /* These two variables need to be globals because the signal handlers will
  * user them.  bg_permitted will be toggled on and off by the SIGTSTP handler,
@@ -42,8 +41,6 @@ int main()
 		perror("Failed to create pipe:");
 		exit(1);
 	}
-	write(sig_pipe[1], "Message 1!\n", 11);
-	write(sig_pipe[1], "Message 2!\n", 11);
 	close(sig_pipe[1]);
 
 	char pipe_buffer[100];
@@ -53,7 +50,6 @@ int main()
 		 * pipe to see if we have been left any messages that we
 		 * should print.
 		 */
-		printf("\n");
 		while ( read(sig_pipe[0], pipe_buffer, 99) > 0)
 		{
 			printf("%s", pipe_buffer);
@@ -68,16 +64,32 @@ int main()
 		{
 			continue;
 		}
-	
-		for (int i = 0; i < 512; i++)
+		
+		if (!strcmp(input.arg_list[0], "exit"))
 		{
-			if (!input.arg_list[i])
-				break;
-			printf("%s\n", input.arg_list[i]);
+			exit(0);
 		}
-		printf("Input: %s\n", input.input_file);
-		printf("Output: %s\n", input.output_file);
-		printf("FG: %d\n", input.fg);
+		else if (!strcmp(input.arg_list[0], "cd"))
+		{
+			printf("CD!\n");
+			continue;
+		}
+		else if (!strcmp(input.arg_list[0], "status"))
+		{
+			printf("STATUS!\n");
+			continue;
+		}
+		else if (!input.fg && bg_permitted)
+		{
+			printf("BG!");
+			continue;
+		}
+		else
+		{
+			spawn_fg(&input);
+			continue;
+		}
+				
 	}
 
 	return 0;
