@@ -1,9 +1,12 @@
 CXX = gcc
-CFLAGS = -Wall
+CFLAGS = -std=gnu11 -Wall
 
 .PHONY: clean
+.PHONY: default
 
-default : smallsh.o smallsh-u.o
+default : smallsh
+	
+smallsh : smallsh.o smallsh-u.o
 	${CXX} ${CFLAGS} -o smallsh smallsh.o smallsh-u.o
 smallsh.o : smallsh.c
 	${CXX} ${CFLAGS} -c smallsh.c

@@ -52,8 +52,14 @@ int parse_input(struct command_data *data)
 			data->arg_list[i] = NULL;
 			break;
 		}
-		//We copy
-		data->arg_list[i] = token;
+		else if (!strcmp(token, "$$"))
+		{
+			data->arg_list[i] = data->pid;
+		}
+		else
+		{
+			data->arg_list[i] = token;
+		}
 	}
 	//Failsafe in case we got the full 512 args.
 	data->arg_list[512] = NULL;
@@ -67,11 +73,6 @@ int parse_input(struct command_data *data)
 		{
 			case '<':
 				token = strtok(NULL, " ");
-				/* We'll do some error handling, here.
-				 * If the user put down a redirector
-				 * but didn't actually specify a redirection,
-				 * we'll allow that to count as /dev/null.
-				 */
 				if (token)
 					data->input_file = token;
 				break;
