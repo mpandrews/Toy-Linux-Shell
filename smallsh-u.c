@@ -10,15 +10,15 @@
 
 extern int bg_permitted;
 
-void free_expansion_links(struct dollar_expansion_link *head)
+void free_expansion_links(struct dollar_expansion_link **head)
 {
-	if (!head)
+	if ( !(*head) )
 	{
 		return;
 	}
 	struct dollar_expansion_link *current, *next;
-	current = head;
-	head = NULL;
+	current = *head;
+	*head = NULL;
 
 	do
 	{
@@ -53,7 +53,7 @@ char* make_expansion_string(char* input, char* pid_str)
 	//Determine the index at which the first dollar sign appears:
 	int dollar_idx = dollar_ptr - input;
 	//Malloc a new string big enough to hold the input, plus three chars:
-	char* return_str = malloc( (strlen(input) + 3) * sizeof(char) );
+	char* return_str = malloc( (strlen(input) + 4) * sizeof(char) );
 	if (!return_str)
 	{
 		fprintf(stderr, "Error: failed to malloc new string in");
@@ -71,22 +71,22 @@ char* make_expansion_string(char* input, char* pid_str)
 	return return_str;
 }
 
-char* make_expansion_link(struct dollar_expansion_link *head,
+char* make_expansion_link(struct dollar_expansion_link **head,
 		char* input_str, char* pid_str)
 {
-	if (!head)
+	if (!(*head))
 	{
-		head = malloc(sizeof(struct dollar_expansion_link));
-		if (!head)
+		*head = malloc(sizeof(struct dollar_expansion_link));
+		if (!*(head))
 		{
 			fprintf(stderr, "Error malloc'ing new expansion ");
 			fprintf(stderr, " link list head!\n");
 			exit(1);
 		}
-		head->next = NULL;
-		head->value = NULL;
+		(*head)->next = NULL;
+		(*head)->value = NULL;
 	}
-	struct dollar_expansion_link* iter = head;
+	struct dollar_expansion_link* iter = *head;
 	//Navigate to the end of the list.
 	while(iter->next)
 	{
@@ -121,7 +121,7 @@ int parse_input(struct command_data *data)
 	data->fg = 1;
 	data->input_file = NULL;
 	data->output_file = NULL;
-	free_expansion_links(data->expanded_args);
+	free_expansion_links(&(data->expanded_args));
 	//We'll check to make sure we weren't passed a null pointer.
 	if (!data->input_buffer)
 	{
@@ -159,7 +159,7 @@ int parse_input(struct command_data *data)
 	}
 	else
 	{
-		data->arg_list[0] = make_expansion_link(data->expanded_args, 
+		data->arg_list[0] = make_expansion_link(&(data->expanded_args), 
 							token, data->pid);
 	}
 	for (i = 1; i < 512; i++)
@@ -175,7 +175,7 @@ int parse_input(struct command_data *data)
 		else if (strstr(token, "$$"))
 		{
 			data->arg_list[i] = make_expansion_link(
-					data->expanded_args, token, data->pid);
+				&(data->expanded_args), token, data->pid);
 		}
 		else
 		{

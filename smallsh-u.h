@@ -36,7 +36,7 @@ struct bg_children
 /* free_expansion_links will free any linked list of $$ expanded arguments
  * we might have.  We have in the header so main() can call it as part
  * of its exit routine.*/
-void free_expansion_links(struct dollar_expansion_link*);
+void free_expansion_links(struct dollar_expansion_link**);
 
 /* The main input parser.  It does expect that its input buffer will be filled
  * by main before it's called, but it will break the input down into

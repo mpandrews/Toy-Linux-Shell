@@ -77,7 +77,7 @@ int main()
 			{
 				free(input.input_buffer);
 			}
-			free_expansion_links(input.expanded_args);
+			free_expansion_links(&(input.expanded_args));
 			close(sig_pipe[0]);
 			close(sig_pipe[1]);
 			exit(0);
