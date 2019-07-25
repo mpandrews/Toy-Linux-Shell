@@ -161,18 +161,16 @@ int parse_input(struct command_data *data)
 	for (i = 1; i < 512; i++)
 	{
 		token = strtok(NULL, " ");
-		//>, <, and & must go after all args.
-		if (!token || token[0] == '<' ||
-				token[0] == '>' || token[0] == '&')
-		{
-			data->arg_list[i] = NULL;
-			break;
-		}
 		//If we find $$, we need to expand any and all instances
 		//into instances of the PID.  Because we can't expand
 		//in-place, we have a linked list we can populate with
 		//expanded token strings.
-		else if (strstr(token, "$$"))
+		if (!token)
+		{
+			data->arg_list[i] = NULL;
+			break;
+		}
+		if (strstr(token, "$$"))
 		{
 			data->arg_list[i] = make_expansion_link(
 				&(data->expanded_args), token, data->pid);
@@ -185,31 +183,55 @@ int parse_input(struct command_data *data)
 	//Failsafe in case we got the full 512 args.
 	data->arg_list[512] = NULL;
 
-	//Now we need to check for redirections and background.
-
-	while (token)
+	/*Now we need to check for redirections and background.
+	 * We start by seeing if the very last argument is an ampersand.
+	 * As a failsafe, we'll return immediately if there is only one
+	 * arg in the list. At that point, ampersand should probably
+	 * be treated as the command itself, rather than an instruction
+	 * to background nothing.
+	 */
+	i--;
+	if (i < 1)
 	{
-		// We'll switch on the first character of the string.
-		switch (token[0])
+		return 0;
+	}
+	/* If we find an ampersand, we set the foreground flag to false,
+	 * and then remove the ampersand from the argument array.
+	 */
+	if (!strcmp(data->arg_list[i], "&"))
+	{
+		data->fg = 0;
+		data->arg_list[i] = NULL;
+		i--;
+	}
+	/* Now the redirects: we'll loop through twice, because it could be
+	 * in any order.  Again, we'll return out if this would either
+	 * put us out of bounds or leave us redirecting nothing at all.
+	 */
+	if (i < 2)
+	{
+		return 0;
+	}
+	for (int j = 0; j < 2; j++)
+	{
+		if (!strcmp(data->arg_list[i - 1], "<"))
 		{
-			case '<':
-				token = strtok(NULL, " ");
-				if (token)
-					data->input_file = token;
-				break;
-			case '>':
-				token = strtok(NULL, " ");
-				if (token)
-					data->output_file = token;
-				break;
-			case '&':
-				data->fg = 0;
-				break;
+			data->input_file = data->arg_list[i];
+			data->arg_list[i] = NULL;
+			data->arg_list[i - 1] = NULL;
+			i -= 2;
 		}
-		// If we already hit a null pointer, we don't need to tokenize
-		// further, we can just let the while loop end normally.
-		if (token)
-			token = strtok(NULL, " ");
+		else if (!strcmp(data->arg_list[i - 1], ">"))
+		{
+			data->output_file = data->arg_list[i];
+			data->arg_list[i] = NULL;
+			data->arg_list[i - 1] = NULL;
+			i -= 2;
+		}
+		if (i < 2)
+		{
+			return 0;
+		}
 	}
 
 	return 0;
