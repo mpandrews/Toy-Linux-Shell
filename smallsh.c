@@ -11,12 +11,8 @@
 
 #define MAX_INPUT_SIZE 2048
 
-/* These variables need to be global because signal handlers will interact
- * with them. */
 sig_atomic_t bg_permitted = 1; //Toggle whether programs are allowed 
 				//to run in the bg.
-sig_atomic_t fg_active = 0; //Toggle to let the SIGSTP handler know whether 
-			     //to print immediately, or enqueue.
 
 int main()
 {
@@ -30,17 +26,24 @@ int main()
 	size_t max_input = MAX_INPUT_SIZE;
 	pid_t master_pid;
 	int last_fg_status;
+
+	signal(SIGTSTP, sigtstp_handler);
 	//We'll want to know what the PID of the master shell is for a couple
 	//of reasons; one is so that we can abort any fork() call that
 	//comes from some other instance of the shell (which shouldn't happen)
 	//and the other is so that the parser can do $$ expansion.
 	master_pid = getpid();
+
+	//We need to ignore SIG_IGN in the main shell.  Alarmingly.
+	signal(SIGINT, SIG_IGN);
+
+	//We'll give a stringified copy of the master PID to the input
+	//struct, which it will use for $$ expansion.
 	sprintf(input.pid, "%d", (int) master_pid);
 	while (1)
 	{
-		/* The first thing we do on a loop is check the signal
-		 * pipe to see if we have been left any messages that we
-		 * should print.
+		/*The first thing we do on each pass is see if we have any
+		 * zombies in need of collection.
 		 */
 		int reaped = 0;
 		int reaped_status;
@@ -50,7 +53,12 @@ int main()
 			print_status(&reaped_status);
 		}
 
-		printf(":");
+		//The prompt.  We start with a carriage return because
+		//we might end up with a double-colon if, say, the user
+		//hits Ctrl-Z while a foreground process is running.
+		//Because the signal handler provides a colon of its own,
+		//this might be redundant.
+		printf("\r:");
 		fflush(stdout);
 		getline(&input.input_buffer, &max_input, stdin);
 

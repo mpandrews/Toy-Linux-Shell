@@ -6,11 +6,11 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <signal.h>
 #include "smallsh-u.h"
 #include "smallsh-sig.h"
 
 extern sig_atomic_t bg_permitted;
-extern sig_atomic_t fg_active;
 
 void free_expansion_links(struct dollar_expansion_link **head)
 {
@@ -230,7 +230,7 @@ void redirect_in(const char* source)
 
 void redirect_out(const char* dest)
 {
-	int out_descriptor = open(dest, O_WRONLY);
+	int out_descriptor = open(dest, O_WRONLY | O_TRUNC);
 	if (out_descriptor == -2)
 	{
 		fprintf(stderr, "cannot open %s for output\n",
@@ -258,7 +258,13 @@ void print_status(int *status)
 
 void spawn_fg(struct command_data *data, int *status)
 {
-	fg_active = 1;
+	//We'll temporarily block SIGTSTP to prevent the signal handler
+	//from going off while we have a fg process.	
+	sigset_t fgsigs;
+	sigset_t oldsigs;
+	sigemptyset(&fgsigs);
+	sigaddset(&fgsigs, SIGTSTP);
+	sigprocmask(SIG_BLOCK, &fgsigs, &oldsigs);
 	int fork_ret = fork();
 	switch (fork_ret)
 	{
@@ -266,21 +272,30 @@ void spawn_fg(struct command_data *data, int *status)
 			perror("Forking failed");
 			break;
 		case 0:
+			//foreground processes need to ignore TSTP, but
+			//allow INT to hit.  We'll unblock TSTP, though:
+			//since we're ignoring it, we may as well not have them
+			//pile up on the doorstep, right?
+			signal(SIGINT, SIG_DFL);
+			signal(SIGTSTP, SIG_IGN);
+			sigprocmask(SIG_SETMASK, &oldsigs, NULL);
+			//If redirection was specified, we'll set it up here.
 			if (data->input_file)
 				redirect_in(data->input_file);
 			if (data->output_file)
 				redirect_out(data->output_file);
 			//The actual execution!
 			execvp(data->arg_list[0], data->arg_list);
+			//Bad, bad things have happened if we're here.
 			fprintf(stderr, "%s: ", data->arg_list[0]);
 			perror("");
 			exit(1);
 			break;
 		default:
 			waitpid(fork_ret, status, 0);
+			sigprocmask(SIG_SETMASK, &oldsigs, NULL);
 			break;
 	}
-	fg_active = 0;
 }
 
 void spawn_bg(struct command_data *data)
@@ -293,6 +308,8 @@ void spawn_bg(struct command_data *data)
 			exit(1);
 			break;
 		case 0:
+			signal(SIGINT, SIG_IGN);
+			signal(SIGTSTP, SIG_IGN);
 			if (data->input_file)
 			{
 				redirect_in(data->input_file);
