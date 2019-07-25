@@ -47,6 +47,8 @@ int parse_input(struct command_data*);
 
 void spawn_fg(struct command_data*, int*);
 
+void spawn_bg(struct command_data*);
+
 void print_status(int*);
 
 #endif

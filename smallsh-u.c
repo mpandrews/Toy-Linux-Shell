@@ -7,8 +7,10 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include "smallsh-u.h"
+#include "smallsh-sig.h"
 
-extern int bg_permitted;
+extern sig_atomic_t bg_permitted;
+extern sig_atomic_t fg_active;
 
 void free_expansion_links(struct dollar_expansion_link **head)
 {
@@ -256,8 +258,8 @@ void print_status(int *status)
 
 void spawn_fg(struct command_data *data, int *status)
 {
+	fg_active = 1;
 	int fork_ret = fork();
-	
 	switch (fork_ret)
 	{
 		case -1:
@@ -278,5 +280,42 @@ void spawn_fg(struct command_data *data, int *status)
 			waitpid(fork_ret, status, 0);
 			break;
 	}
+	fg_active = 0;
+}
 
+void spawn_bg(struct command_data *data)
+{
+	int fork_ret = fork();
+	switch (fork_ret)
+	{
+		case -1:
+			perror("Forking failed!:");
+			exit(1);
+			break;
+		case 0:
+			if (data->input_file)
+			{
+				redirect_in(data->input_file);
+			}
+			else
+			{
+				redirect_in("/dev/null");
+			}
+			if (data->output_file)
+			{
+				redirect_out(data->output_file);
+			}
+			else
+			{
+				redirect_out("/dev/null");
+			}
+			execvp(data->arg_list[0], data->arg_list);
+			fprintf(stderr, "%s:", data->arg_list[0]);
+			perror("");
+			exit(1);
+			break;
+		default:
+			printf("background pid is %d\n", fork_ret);
+			break;
+	}
 }

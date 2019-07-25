@@ -7,17 +7,16 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 #include "smallsh-u.h"
+#include "smallsh-sig.h"
 
 #define MAX_INPUT_SIZE 2048
 
 /* These variables need to be global because signal handlers will interact
  * with them. */
-int bg_permitted = 1; //Toggle whether programs are allowed to run in the bg.
-
-int sig_pipe[2]; //Pipe for enqueuing messages main will spit out when free.
-
-int fg_active = 0; //Toggle to let the SIGSTP handler know whether to print
-		     //immediately, or enqueue.
+sig_atomic_t bg_permitted = 1; //Toggle whether programs are allowed 
+				//to run in the bg.
+sig_atomic_t fg_active = 0; //Toggle to let the SIGSTP handler know whether 
+			     //to print immediately, or enqueue.
 
 int main()
 {
@@ -37,26 +36,18 @@ int main()
 	//and the other is so that the parser can do $$ expansion.
 	master_pid = getpid();
 	sprintf(input.pid, "%d", (int) master_pid);
-	//This pipe will be used to enqueue terminal output from the signal
-	//handlers, so that main can spit them out ahead of the prompt.
-	if (pipe(sig_pipe) == - 1)
-	{
-		perror("Failed to create pipe:");
-		exit(1);
-	}
-	close(sig_pipe[1]);
-
-	char pipe_buffer[100];
 	while (1)
 	{
 		/* The first thing we do on a loop is check the signal
 		 * pipe to see if we have been left any messages that we
 		 * should print.
 		 */
-		while ( read(sig_pipe[0], pipe_buffer, 99) > 0)
+		int reaped = 0;
+		int reaped_status;
+		while ( (reaped = waitpid(-1, &reaped_status, WNOHANG)) > 0 )
 		{
-			printf("%s", pipe_buffer);
-			fflush(stdout);
+			printf("background pid %d is done: ", reaped);
+			print_status(&reaped_status);
 		}
 
 		printf(":");
@@ -77,8 +68,6 @@ int main()
 				free(input.input_buffer);
 			}
 			free_expansion_links(&(input.expanded_args));
-			close(sig_pipe[0]);
-			close(sig_pipe[1]);
 			exit(0);
 		}
 		else if (!strcmp(input.arg_list[0], "cd"))
@@ -100,7 +89,7 @@ int main()
 		}
 		else if (!input.fg && bg_permitted)
 		{
-			printf("BG!");
+			spawn_bg(&input);
 			continue;
 		}
 		else
