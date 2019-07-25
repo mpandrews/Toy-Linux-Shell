@@ -217,7 +217,7 @@ int parse_input(struct command_data *data)
 
 void redirect_in(const char* source)
 {
-	int in_descriptor = open(source, O_RDONLY | O_CREAT);
+	int in_descriptor = open(source, O_RDONLY);
 	if (in_descriptor == -1)
 	{
 		fprintf(stderr, "cannot open %s for input\n",
@@ -230,7 +230,7 @@ void redirect_in(const char* source)
 
 void redirect_out(const char* dest)
 {
-	int out_descriptor = open(dest, O_WRONLY | O_TRUNC);
+	int out_descriptor = open(dest, O_WRONLY | O_TRUNC | O_CREAT, 0700);
 	if (out_descriptor == -2)
 	{
 		fprintf(stderr, "cannot open %s for output\n",
