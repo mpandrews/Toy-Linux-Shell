@@ -5,7 +5,6 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/wait.h>
-#include <fcntl.h>
 #include "smallsh-u.h"
 #include "smallsh-sig.h"
 
@@ -34,7 +33,7 @@ int main()
 	//and the other is so that the parser can do $$ expansion.
 	master_pid = getpid();
 
-	//We need to ignore SIG_IGN in the main shell.  Alarmingly.
+	//We need to ignore SIGINT in the main shell.  Alarmingly.
 	signal(SIGINT, SIG_IGN);
 
 	//We'll give a stringified copy of the master PID to the input
@@ -68,7 +67,9 @@ int main()
 		{
 			continue;
 		}
-		
+		/*The builtins are simple enough that I didn't break them
+		 *out into functions, with the exception of status, which
+		 *is used a few other places. */
 		if (!strcmp(input.arg_list[0], "exit"))
 		{
 			if (input.input_buffer)
@@ -88,22 +89,22 @@ int main()
 			{
 				chdir(input.arg_list[1]);
 			}
-			continue;
 		}
 		else if (!strcmp(input.arg_list[0], "status"))
 		{
 			print_status(&last_fg_status);
-			continue;
 		}
+		/* If we're here, we've got valid input which wasn't a builtin,
+		 * so we need to check if bg status has been requested and
+		 * is permitted.
+		 */
 		else if (!input.fg && bg_permitted)
 		{
 			spawn_bg(&input);
-			continue;
 		}
 		else
 		{
 			spawn_fg(&input, &last_fg_status);
-			continue;
 		}
 				
 	}
