@@ -10,13 +10,18 @@
 
 #define MAX_INPUT_SIZE 2048
 
-/* These two variables need to be globals because the signal handlers will
- * user them.  bg_permitted will be toggled on and off by the SIGTSTP handler,
- * while sig_pipe will be used to enqueue terminal messages for later
- * delivery by main().
- */
-int bg_permitted = 1;
-int sig_pipe[2];
+/* These variables need to be global because signal handlers will interact
+ * with them. */
+int bg_permitted = 1; //Toggle whether programs are allowed to run in the bg.
+
+int sig_pipe[2]; //Pipe for enqueuing messages main will spit out when free.
+
+int fg_active = 0; //Toggle to let the SIGSTP handler know whether to print
+		     //immediately, or enqueue.
+
+int last_fg_status = 0; //The status var.  If a forked child fails its call
+			//to exec, we'll use SIGUSR1 to convey that information
+			//back, so the handler needs this to be global.
 
 int main()
 {
@@ -26,6 +31,7 @@ int main()
 	//up for us and prepare any redirects, etc.
 	struct command_data input;
 	input.input_buffer = NULL;
+	input.expanded_args = NULL;
 	size_t max_input = MAX_INPUT_SIZE;
 	pid_t master_pid;
 	//We'll want to know what the PID of the master shell is for a couple
@@ -67,6 +73,13 @@ int main()
 		
 		if (!strcmp(input.arg_list[0], "exit"))
 		{
+			if (input.input_buffer)
+			{
+				free(input.input_buffer);
+			}
+			free_expansion_links(input.expanded_args);
+			close(sig_pipe[0]);
+			close(sig_pipe[1]);
 			exit(0);
 		}
 		else if (!strcmp(input.arg_list[0], "cd"))

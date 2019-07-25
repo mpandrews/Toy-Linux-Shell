@@ -10,12 +10,118 @@
 
 extern int bg_permitted;
 
+void free_expansion_links(struct dollar_expansion_link *head)
+{
+	if (!head)
+	{
+		return;
+	}
+	struct dollar_expansion_link *current, *next;
+	current = head;
+	head = NULL;
+
+	do
+	{
+		if (current->value)
+		{
+			free(current->value);
+		}
+		next = current->next;
+		free(current);
+		current = next;
+	}while(current);
+
+	return;
+}
+
+char* make_expansion_string(char* input, char* pid_str)
+{
+	if (!input || !pid_str)
+	{
+		fprintf(stderr, "Error: make_expansion_string called");
+		fprintf(stderr, " on empty string!\n");
+		exit(1);
+	}
+	char* dollar_ptr = strstr(input, "$$");
+	//We'll just kick the original string back out if we come up empty.
+	//This will allow us to handle the edge case where we might
+	//conceivably have multiple expansions in a single token.
+	if (!dollar_ptr)
+	{
+		return input;
+	}
+	//Determine the index at which the first dollar sign appears:
+	int dollar_idx = dollar_ptr - input;
+	//Malloc a new string big enough to hold the input, plus three chars:
+	char* return_str = malloc( (strlen(input) + 3) * sizeof(char) );
+	if (!return_str)
+	{
+		fprintf(stderr, "Error: failed to malloc new string in");
+		fprintf(stderr, " make_expansion_string()!\n");
+		exit(1);
+	}
+	return_str[0] = '\0';
+	//Copy everything up to the first dollar sign:
+	strncat(return_str, input, dollar_idx);
+	//Copy the pid string.
+	strcat(return_str, pid_str);
+	//Copy everything after the $$.
+	strcat(return_str, dollar_ptr + 2);
+
+	return return_str;
+}
+
+char* make_expansion_link(struct dollar_expansion_link *head,
+		char* input_str, char* pid_str)
+{
+	if (!head)
+	{
+		head = malloc(sizeof(struct dollar_expansion_link));
+		if (!head)
+		{
+			fprintf(stderr, "Error malloc'ing new expansion ");
+			fprintf(stderr, " link list head!\n");
+			exit(1);
+		}
+		head->next = NULL;
+		head->value = NULL;
+	}
+	struct dollar_expansion_link* iter = head;
+	//Navigate to the end of the list.
+	while(iter->next)
+	{
+		iter = iter->next;
+	}
+	//Make a new item.
+	iter->next = malloc(sizeof(struct dollar_expansion_link));
+	iter = iter->next;
+	iter->next = NULL;
+	iter->value = make_expansion_string(input_str, pid_str);
+	char *test_string = make_expansion_string(iter->value, pid_str);
+	if (test_string == iter->value)
+	{
+		return iter->value;
+	}
+	//This will test to see if we have additional instances of
+	//$$ in the string, and repeatedly generate new strings
+	//if we do.  It's an edge case, so I'm not going to fret too much
+	//about the cycles it will take.
+	do
+	{
+		free(iter->value);
+		iter->value = test_string;
+		test_string = make_expansion_string(iter->value, pid_str);
+	}while (test_string != iter->value);
+	return iter->value;
+}
+
 int parse_input(struct command_data *data)
 {
 	int i;
 	data->fg = 1;
 	data->input_file = NULL;
 	data->output_file = NULL;
+	free_expansion_links(data->expanded_args);
 	//We'll check to make sure we weren't passed a null pointer.
 	if (!data->input_buffer)
 	{
@@ -47,7 +153,15 @@ int parse_input(struct command_data *data)
 		return 1;
 	}
 	//Populate the argument list.
-	data->arg_list[0] = token;
+	if (!strstr(token, "$$"))
+	{
+		data->arg_list[0] = token;
+	}
+	else
+	{
+		data->arg_list[0] = make_expansion_link(data->expanded_args, 
+							token, data->pid);
+	}
 	for (i = 1; i < 512; i++)
 	{
 		token = strtok(NULL, " ");
@@ -58,9 +172,10 @@ int parse_input(struct command_data *data)
 			data->arg_list[i] = NULL;
 			break;
 		}
-		else if (!strcmp(token, "$$"))
+		else if (strstr(token, "$$"))
 		{
-			data->arg_list[i] = data->pid;
+			data->arg_list[i] = make_expansion_link(
+					data->expanded_args, token, data->pid);
 		}
 		else
 		{
