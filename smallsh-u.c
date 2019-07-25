@@ -97,21 +97,15 @@ char* make_expansion_link(struct dollar_expansion_link **head,
 	iter = iter->next;
 	iter->next = NULL;
 	iter->value = make_expansion_string(input_str, pid_str);
-	char *test_string = make_expansion_string(iter->value, pid_str);
-	if (test_string == iter->value)
+	//This block will keep calling the expansion function
+	//until there are no more $$ instances left.
+	char *replacement_str;
+	while (strstr(iter->value, "$$"))
 	{
-		return iter->value;
-	}
-	//This will test to see if we have additional instances of
-	//$$ in the string, and repeatedly generate new strings
-	//if we do.  It's an edge case, so I'm not going to fret too much
-	//about the cycles it will take.
-	do
-	{
+		replacement_str = make_expansion_string(iter->value, pid_str);
 		free(iter->value);
-		iter->value = test_string;
-		test_string = make_expansion_string(iter->value, pid_str);
-	}while (test_string != iter->value);
+		iter->value = replacement_str;
+	}
 	return iter->value;
 }
 
@@ -172,6 +166,10 @@ int parse_input(struct command_data *data)
 			data->arg_list[i] = NULL;
 			break;
 		}
+		//If we find $$, we need to expand any and all instances
+		//into instances of the PID.  Because we can't expand
+		//in-place, we have a linked list we can populate with
+		//expanded token strings.
 		else if (strstr(token, "$$"))
 		{
 			data->arg_list[i] = make_expansion_link(
@@ -241,10 +239,24 @@ void redirect_out(const char* dest)
 	dup2(out_descriptor, STDOUT_FILENO);
 }
 
-void spawn_fg(struct command_data *data)
+void print_status(int *status)
+{
+	if (WIFEXITED(*status))
+	{
+		printf("exit value %d\n", WEXITSTATUS(*status));
+	}
+	else if (WIFSIGNALED(*status))
+	{
+		printf("terminated by signal %d\n", WTERMSIG(*status));
+	}
+	fflush(stdout);
+}
+
+
+
+void spawn_fg(struct command_data *data, int *status)
 {
 	int fork_ret = fork();
-	int return_info;
 	
 	switch (fork_ret)
 	{
@@ -262,9 +274,9 @@ void spawn_fg(struct command_data *data)
 			exit(1);
 			break;
 		default:
-			waitpid(fork_ret, &return_info, 0);
+			waitpid(fork_ret, status, 0);
+			print_status(status);
 			break;
 	}
-
 
 }

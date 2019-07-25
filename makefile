@@ -1,5 +1,5 @@
 CXX = gcc
-CFLAGS = -std=gnu11 -Wall
+CFLAGS = -std=gnu11 -Wall -g
 
 .PHONY: clean
 .PHONY: default

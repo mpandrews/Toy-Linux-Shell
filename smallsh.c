@@ -19,10 +19,6 @@ int sig_pipe[2]; //Pipe for enqueuing messages main will spit out when free.
 int fg_active = 0; //Toggle to let the SIGSTP handler know whether to print
 		     //immediately, or enqueue.
 
-int last_fg_status = 0; //The status var.  If a forked child fails its call
-			//to exec, we'll use SIGUSR1 to convey that information
-			//back, so the handler needs this to be global.
-
 int main()
 {
 	//This is a struct that we'll use to package up all the
@@ -34,6 +30,7 @@ int main()
 	input.expanded_args = NULL;
 	size_t max_input = MAX_INPUT_SIZE;
 	pid_t master_pid;
+	int last_fg_status;
 	//We'll want to know what the PID of the master shell is for a couple
 	//of reasons; one is so that we can abort any fork() call that
 	//comes from some other instance of the shell (which shouldn't happen)
@@ -59,9 +56,11 @@ int main()
 		while ( read(sig_pipe[0], pipe_buffer, 99) > 0)
 		{
 			printf("%s", pipe_buffer);
+			fflush(stdout);
 		}
 
-		printf("\n:");
+		printf(":");
+		fflush(stdout);
 		getline(&input.input_buffer, &max_input, stdin);
 
 		//parse_input returns 1 if it received a comment line,
@@ -84,12 +83,19 @@ int main()
 		}
 		else if (!strcmp(input.arg_list[0], "cd"))
 		{
-			printf("CD!\n");
+			if (!input.arg_list[1])
+			{
+				chdir(getenv("HOME"));
+			}
+			else
+			{
+				chdir(input.arg_list[1]);
+			}
 			continue;
 		}
 		else if (!strcmp(input.arg_list[0], "status"))
 		{
-			printf("STATUS!\n");
+			print_status(&last_fg_status);
 			continue;
 		}
 		else if (!input.fg && bg_permitted)
@@ -99,7 +105,7 @@ int main()
 		}
 		else
 		{
-			spawn_fg(&input);
+			spawn_fg(&input, &last_fg_status);
 			continue;
 		}
 				

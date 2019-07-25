@@ -45,6 +45,8 @@ void free_expansion_links(struct dollar_expansion_link**);
  */
 int parse_input(struct command_data*);
 
-void spawn_fg(struct command_data*);
+void spawn_fg(struct command_data*, int*);
+
+void print_status(int*);
 
 #endif
