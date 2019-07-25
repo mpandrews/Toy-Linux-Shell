@@ -218,7 +218,7 @@ void redirect_in(const char* source)
 	int in_descriptor = open(source, O_RDONLY);
 	if (in_descriptor == -1)
 	{
-		fprintf(stderr, "Could not redirect input from file %s.\n",
+		fprintf(stderr, "cannot open %s for input\n",
 				source);
 		perror("");
 		exit(1);
@@ -231,7 +231,7 @@ void redirect_out(const char* dest)
 	int out_descriptor = open(dest, O_WRONLY);
 	if (out_descriptor == -2)
 	{
-		fprintf(stderr, "Could not redirect output to file %s.\n",
+		fprintf(stderr, "cannot open %s for output\n",
 				dest);
 		perror("");
 		exit(1);
@@ -270,12 +270,12 @@ void spawn_fg(struct command_data *data, int *status)
 				redirect_out(data->output_file);
 			//The actual execution!
 			execvp(data->arg_list[0], data->arg_list);
-			fprintf(stderr, "Execution failed!\n");
+			fprintf(stderr, "%s: ", data->arg_list[0]);
+			perror("");
 			exit(1);
 			break;
 		default:
 			waitpid(fork_ret, status, 0);
-			print_status(status);
 			break;
 	}
 
