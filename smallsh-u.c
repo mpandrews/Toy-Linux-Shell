@@ -217,7 +217,7 @@ int parse_input(struct command_data *data)
 
 void redirect_in(const char* source)
 {
-	int in_descriptor = open(source, O_RDONLY);
+	int in_descriptor = open(source, O_RDONLY | O_CREAT);
 	if (in_descriptor == -1)
 	{
 		fprintf(stderr, "cannot open %s for input\n",
