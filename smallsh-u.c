@@ -52,10 +52,50 @@ char* make_expansion_string(char* input, char* pid_str)
 	{
 		return input;
 	}
+
+	int pid_width = strlen(pid_str);
+	// Edge cases: 1 and 2 digit pids.  We can simplify the routine in
+	// these cases.  We'll still allocate memory and copy the strings over,
+	// though, because the cost of the malloc and copy is less than
+	// that of adding logic to the linked-list freeing routing to avoid
+	// trying to free a pointer to the middle of string.
+	
+	if (pid_width == 2)
+	{
+		char* return_str = malloc( (strlen(input) + 1) * sizeof(char) );
+		strcpy(return_str, input);
+		//Just copy replace the dollar signs directly.
+		while (( dollar_ptr = strstr(return_str, "$$") ))
+		{
+			strncpy(dollar_ptr, pid_str, 2);
+		}
+		return return_str;
+	}
+	else if (pid_width == 1)
+	{
+		char* return_str = malloc( (strlen(input) + 1) * sizeof(char) );
+		strcpy(return_str, input);
+		//Shift everything left 1.
+		while(( dollar_ptr = strstr(return_str, "$$") ))
+		{
+			char* return_end = return_str + strlen(return_str) - 1;
+			for (char* iter = dollar_ptr + 1; iter <= return_end;
+								iter++)
+			{
+				*iter = *(iter + 1);
+			}
+			*dollar_ptr = *pid_str;
+		}
+		return return_str;
+	}
+
 	//Determine the index at which the first dollar sign appears:
 	int dollar_idx = dollar_ptr - input;
-	//Malloc a new string big enough to hold the input, plus three chars:
-	char* return_str = malloc( (strlen(input) + 4) * sizeof(char) );
+	//Get the width of the pid string.
+	//Malloc a new string big enough to hold the input, plus the pid_width
+	//less 1.  (-2 for the $$, and + 1 for the null terminator.):
+	char* return_str = malloc( (strlen(input) + pid_width - 1) 
+							* sizeof(char) );
 	if (!return_str)
 	{
 		fprintf(stderr, "Error: failed to malloc new string in");
@@ -70,6 +110,24 @@ char* make_expansion_string(char* input, char* pid_str)
 	//Copy everything after the $$.
 	strcat(return_str, dollar_ptr + 2);
 
+	//And now the routine for the specific case that we have a token
+	//with more than one set of $$ to expand, and a pid >= 3 digits.
+	while(( dollar_ptr = strstr(return_str, "$$") ))
+	{
+		
+		return_str = realloc(return_str, 
+				(strlen(return_str) + pid_width - 1)
+							* sizeof(char));
+		//Create a pointer to the end of the original string,
+		//counting the null terminator.
+		char *iter = return_str + strlen(return_str) + 1;
+		//Shift everything to the right.
+		for (; iter > dollar_ptr + 1; iter--)
+		{
+			*(iter + (pid_width - 2) ) = *iter;
+		}
+		strncpy(dollar_ptr, pid_str, strlen(pid_str));
+	}
 	return return_str;
 }
 
@@ -99,15 +157,6 @@ char* make_expansion_link(struct dollar_expansion_link **head,
 	iter = iter->next;
 	iter->next = NULL;
 	iter->value = make_expansion_string(input_str, pid_str);
-	//This block will keep calling the expansion function
-	//until there are no more $$ instances left.
-	char *replacement_str;
-	while (strstr(iter->value, "$$"))
-	{
-		replacement_str = make_expansion_string(iter->value, pid_str);
-		free(iter->value);
-		iter->value = replacement_str;
-	}
 	return iter->value;
 }
 
@@ -242,7 +291,7 @@ void redirect_in(const char* source)
 	int in_descriptor = open(source, O_RDONLY);
 	if (in_descriptor == -1)
 	{
-		fprintf(stderr, "cannot open %s for input\n",
+		fprintf(stderr, "cannot open %s for input:",
 				source);
 		perror("");
 		exit(1);
@@ -255,7 +304,7 @@ void redirect_out(const char* dest)
 	int out_descriptor = open(dest, O_WRONLY | O_TRUNC | O_CREAT, 0700);
 	if (out_descriptor == -2)
 	{
-		fprintf(stderr, "cannot open %s for output\n",
+		fprintf(stderr, "cannot open %s for output:",
 				dest);
 		perror("");
 		exit(1);

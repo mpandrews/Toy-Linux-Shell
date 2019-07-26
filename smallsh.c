@@ -10,7 +10,7 @@
 
 #define MAX_INPUT_SIZE 2048
 
-sig_atomic_t bg_permitted = 1; //Toggle whether programs are allowed 
+volatile sig_atomic_t bg_permitted = 1; //Toggle whether programs are allowed 
 				//to run in the bg.
 
 int main()
@@ -32,7 +32,7 @@ int main()
 	//comes from some other instance of the shell (which shouldn't happen)
 	//and the other is so that the parser can do $$ expansion.
 	master_pid = getpid();
-
+	
 	//We need to ignore SIGINT in the main shell.  Alarmingly.
 	signal(SIGINT, SIG_IGN);
 

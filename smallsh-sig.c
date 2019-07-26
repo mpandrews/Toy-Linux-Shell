@@ -5,7 +5,7 @@
 #include <sys/wait.h>
 
 //The flag we toggle.
-extern sig_atomic_t bg_permitted;
+extern volatile sig_atomic_t bg_permitted;
 
 //This should be self explanatory.  The flag is used to control
 //whether processes are allowed to spawn in the background.
