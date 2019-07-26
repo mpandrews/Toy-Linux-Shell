@@ -10,7 +10,7 @@
 #include "smallsh-u.h"
 #include "smallsh-sig.h"
 
-extern sig_atomic_t bg_permitted;
+extern volatile sig_atomic_t bg_permitted;
 
 void free_expansion_links(struct dollar_expansion_link **head)
 {
