@@ -118,9 +118,18 @@ char* make_expansion_string(char* input, char* pid_str)
 		return_str = realloc(return_str, 
 				(strlen(return_str) + pid_width - 1)
 							* sizeof(char));
+		//We need to re-verify the position of the $$ substring,
+		//in case the realloc was not in-place:
+		dollar_ptr = strstr(return_str, "$$");
+		if (!return_str)
+		{
+			fprintf(stderr, "Failure in reallocating $$ exp.");
+			fprintf(stderr, " string!\n");
+			exit(1);
+		}
 		//Create a pointer to the end of the original string,
 		//counting the null terminator.
-		char *iter = return_str + strlen(return_str) + 1;
+		char *iter = return_str + strlen(return_str);
 		//Shift everything to the right.
 		for (; iter > dollar_ptr + 1; iter--)
 		{

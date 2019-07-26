@@ -32,7 +32,6 @@ int main()
 	//comes from some other instance of the shell (which shouldn't happen)
 	//and the other is so that the parser can do $$ expansion.
 	master_pid = getpid();
-	
 	//We need to ignore SIGINT in the main shell.  Alarmingly.
 	signal(SIGINT, SIG_IGN);
 
