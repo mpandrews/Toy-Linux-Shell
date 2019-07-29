@@ -26,14 +26,24 @@ int main()
 	pid_t master_pid;
 	int last_fg_status;
 
-	signal(SIGTSTP, sigtstp_handler);
+	struct sigaction tstp_action_struct;
+	sigemptyset(&tstp_action_struct.sa_mask);
+	tstp_action_struct.sa_flags = SA_RESTART;
+	tstp_action_struct.sa_handler = sigtstp_handler;
+	sigaction(SIGTSTP, &tstp_action_struct, NULL);
+
 	//We'll want to know what the PID of the master shell is for a couple
 	//of reasons; one is so that we can abort any fork() call that
 	//comes from some other instance of the shell (which shouldn't happen)
 	//and the other is so that the parser can do $$ expansion.
 	master_pid = getpid();
 	//We need to ignore SIGINT in the main shell.  Alarmingly.
-	signal(SIGINT, SIG_IGN);
+	
+	struct sigaction int_action_struct;
+	sigemptyset(&int_action_struct.sa_mask);
+	int_action_struct.sa_flags = 0;
+	int_action_struct.sa_handler = SIG_IGN;
+	sigaction(SIGINT, &int_action_struct, NULL);
 
 	//We'll give a stringified copy of the master PID to the input
 	//struct, which it will use for $$ expansion.

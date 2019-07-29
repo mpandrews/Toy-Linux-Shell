@@ -45,12 +45,21 @@ char* make_expansion_string(char* input, char* pid_str)
 		exit(1);
 	}
 	char* dollar_ptr = strstr(input, "$$");
-	//We'll just kick the original string back out if we come up empty.
-	//This will allow us to handle the edge case where we might
-	//conceivably have multiple expansions in a single token.
+	
+	//We should never be in this function if the input string doesn't
+	//contain $$, but just in case that happens we'll malloc a new
+	//string, copy the input, and return it.  The reason for this is
+	//simply that if we don't, we'll 
 	if (!dollar_ptr)
 	{
-		return input;
+		char* return_str = malloc( (strlen(input) + 1) * sizeof(char) );
+		if (!return_str)
+		{
+			fprintf(stderr, "Malloc failure in $$ expansion.\n");
+			exit(1);
+		}
+		strcpy(return_str, input);
+		return return_str;
 	}
 
 	int pid_width = strlen(pid_str);
@@ -63,6 +72,11 @@ char* make_expansion_string(char* input, char* pid_str)
 	if (pid_width == 2)
 	{
 		char* return_str = malloc( (strlen(input) + 1) * sizeof(char) );
+		if (!return_str)
+		{
+			fprintf(stderr, "Malloc failure in $$ expansion.\n");
+			exit(1);
+		}
 		strcpy(return_str, input);
 		//Just copy replace the dollar signs directly.
 		while (( dollar_ptr = strstr(return_str, "$$") ))
@@ -74,6 +88,11 @@ char* make_expansion_string(char* input, char* pid_str)
 	else if (pid_width == 1)
 	{
 		char* return_str = malloc( (strlen(input) + 1) * sizeof(char) );
+		if (!return_str)
+		{
+			fprintf(stderr, "Malloc failure in $$ expansion.");
+			exit(1);
+		}
 		strcpy(return_str, input);
 		//Shift everything left 1.
 		while(( dollar_ptr = strstr(return_str, "$$") ))
@@ -98,8 +117,7 @@ char* make_expansion_string(char* input, char* pid_str)
 							* sizeof(char) );
 	if (!return_str)
 	{
-		fprintf(stderr, "Error: failed to malloc new string in");
-		fprintf(stderr, " make_expansion_string()!\n");
+		fprintf(stderr, "Malloc failure in $$ expansion.\n");
 		exit(1);
 	}
 	return_str[0] = '\0';
@@ -115,18 +133,21 @@ char* make_expansion_string(char* input, char* pid_str)
 	while(( dollar_ptr = strstr(return_str, "$$") ))
 	{
 		
+		//Reallocate the return string with enough space to hold
+		//another $$ expansion.
 		return_str = realloc(return_str, 
 				(strlen(return_str) + pid_width - 1)
 							* sizeof(char));
-		//We need to re-verify the position of the $$ substring,
-		//in case the realloc was not in-place:
-		dollar_ptr = strstr(return_str, "$$");
 		if (!return_str)
 		{
 			fprintf(stderr, "Failure in reallocating $$ exp.");
 			fprintf(stderr, " string!\n");
 			exit(1);
 		}
+
+		//We need to re-verify the position of the $$ substring,
+		//in case the realloc was not in-place:
+		dollar_ptr = strstr(return_str, "$$");
 		//Create a pointer to the end of the original string,
 		//counting the null terminator.
 		char *iter = return_str + strlen(return_str);
@@ -345,6 +366,18 @@ void spawn_fg(struct command_data *data, int *status)
 	sigemptyset(&fgsigs);
 	sigaddset(&fgsigs, SIGTSTP);
 	sigprocmask(SIG_BLOCK, &fgsigs, &oldsigs);
+
+	//We'll set up the handlers for the child process, so that it can
+	//use the default SIGINT and ignore SIGTSTP.
+	struct sigaction child_tstp;
+	sigemptyset(&child_tstp.sa_mask);
+	struct sigaction child_int;
+	sigemptyset(&child_int.sa_mask);
+	//SA_RESTART is the only flag set by default, so we'll set it.
+	child_int.sa_flags = child_tstp.sa_flags = SA_RESTART;
+	child_tstp.sa_handler = SIG_IGN;
+	child_int.sa_handler = SIG_DFL;
+
 	int fork_ret = fork();
 	switch (fork_ret)
 	{
@@ -356,8 +389,8 @@ void spawn_fg(struct command_data *data, int *status)
 			//allow INT to hit.  We'll unblock TSTP, though:
 			//since we're ignoring it, we may as well not have them
 			//pile up on the doorstep, right?
-			signal(SIGINT, SIG_DFL);
-			signal(SIGTSTP, SIG_IGN);
+			sigaction(SIGTSTP, &child_tstp, NULL);
+			sigaction(SIGINT, &child_int, NULL);
 			sigprocmask(SIG_SETMASK, &oldsigs, NULL);
 			//If redirection was specified, we'll set it up here.
 			if (data->input_file)
@@ -373,13 +406,23 @@ void spawn_fg(struct command_data *data, int *status)
 			break;
 		default:
 			waitpid(fork_ret, status, 0);
-			sigprocmask(SIG_SETMASK, &oldsigs, NULL);
 			break;
 	}
+	//We'll restore the old signal mask out here, to cover the oddball
+	//case that fork failed and we're cycling to a new prompt.
+	sigprocmask(SIG_SETMASK, &oldsigs, NULL);
 }
 
 void spawn_bg(struct command_data *data)
 {
+	
+	//We'll create a sigaction struct that ignores its signal,
+	//so that we can use to ignore SIGINT and SIGTSTP in the child process.
+	struct sigaction child_handlers;
+	sigemptyset(&child_handlers.sa_mask);
+	child_handlers.sa_flags = SA_RESTART;
+	child_handlers.sa_handler = SIG_IGN;
+	
 	int fork_ret = fork();
 	switch (fork_ret)
 	{
@@ -388,8 +431,8 @@ void spawn_bg(struct command_data *data)
 			exit(1);
 			break;
 		case 0:
-			signal(SIGINT, SIG_IGN);
-			signal(SIGTSTP, SIG_IGN);
+			sigaction(SIGINT, &child_handlers, NULL);
+			sigaction(SIGTSTP, &child_handlers, NULL);
 			if (data->input_file)
 			{
 				redirect_in(data->input_file);
