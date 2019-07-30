@@ -26,17 +26,14 @@ int main()
 	pid_t master_pid;
 	int last_fg_status;
 
+	//We'll set up the handler for SIGTSTP here.  We'll give it an
+	//empty mask and only the RESTART flag.
 	struct sigaction tstp_action_struct;
 	sigemptyset(&tstp_action_struct.sa_mask);
 	tstp_action_struct.sa_flags = SA_RESTART;
 	tstp_action_struct.sa_handler = sigtstp_handler;
 	sigaction(SIGTSTP, &tstp_action_struct, NULL);
 
-	//We'll want to know what the PID of the master shell is for a couple
-	//of reasons; one is so that we can abort any fork() call that
-	//comes from some other instance of the shell (which shouldn't happen)
-	//and the other is so that the parser can do $$ expansion.
-	master_pid = getpid();
 	//We need to ignore SIGINT in the main shell.  Alarmingly.
 	
 	struct sigaction int_action_struct;
@@ -45,9 +42,17 @@ int main()
 	int_action_struct.sa_handler = SIG_IGN;
 	sigaction(SIGINT, &int_action_struct, NULL);
 
+	//We'll want to know what the PID of the master shell is for a couple
+	//of reasons; one is so that we can abort any fork() call that
+	//comes from some other instance of the shell (which shouldn't happen)
+	//and the other is so that the parser can do $$ expansion.
+	master_pid = getpid();
+
 	//We'll give a stringified copy of the master PID to the input
 	//struct, which it will use for $$ expansion.
 	sprintf(input.pid, "%d", (int) master_pid);
+
+	//The main prompt-execute loop.
 	while (1)
 	{
 		/*The first thing we do on each pass is see if we have any
@@ -85,6 +90,11 @@ int main()
 			{
 				free(input.input_buffer);
 			}
+			/* It's conceivable the user might type something
+			 * weird like 'exit $$' so we'll free the expansion
+			 * LL just in case.  The function is safe if passed
+			 * a NULL pointer.
+			 */
 			free_expansion_links(&(input.expanded_args));
 			exit(0);
 		}
