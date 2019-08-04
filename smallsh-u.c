@@ -435,8 +435,9 @@ void spawn_bg(struct command_data *data)
 			exit(1);
 			break;
 		case 0:
-			sigaction(SIGINT, &child_handlers, NULL);
 			sigaction(SIGTSTP, &child_handlers, NULL);
+			child_handlers.sa_handler = SIG_DFL;
+			sigaction(SIGINT, &child_handlers, NULL);
 			if (data->input_file)
 			{
 				redirect_in(data->input_file);

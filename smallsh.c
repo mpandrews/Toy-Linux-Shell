@@ -96,6 +96,11 @@ int main()
 			 * a NULL pointer.
 			 */
 			free_expansion_links(&(input.expanded_args));
+			sigset_t term_mask;
+			sigemptyset(&term_mask);
+			sigaddset(&term_mask, SIGTERM);
+			sigprocmask(SIG_BLOCK, &term_mask, NULL);
+			kill(0, SIGTERM);
 			exit(0);
 		}
 		else if (!strcmp(input.arg_list[0], "cd"))
