@@ -48,6 +48,12 @@ int main()
 	//and the other is so that the parser can do $$ expansion.
 	master_pid = getpid();
 
+	//We'll set out process group to our process number.  This way
+	//when we exit, we can call TERM on our process group without
+	//any risk of nailing whatever shell (or shell script...) spawned us
+	//in the first place.
+	setpgid(0, 0);
+
 	//We'll give a stringified copy of the master PID to the input
 	//struct, which it will use for $$ expansion.
 	sprintf(input.pid, "%d", (int) master_pid);
