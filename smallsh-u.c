@@ -406,6 +406,10 @@ void spawn_fg(struct command_data *data, int *status)
 			break;
 		default:
 			waitpid(fork_ret, status, 0);
+			if(WIFSIGNALED(*status))
+			{
+				print_status(status);
+			}
 			break;
 	}
 	//We'll restore the old signal mask out here, to cover the oddball
