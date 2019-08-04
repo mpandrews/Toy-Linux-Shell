@@ -417,7 +417,7 @@ void spawn_fg(struct command_data *data, int *status)
 			//Now the error messages;
 			fprintf(stderr, "\r%s: ", data->arg_list[0]);
 			perror("");
-			printf("\r:");
+			printf("\r: ");
 			*status = 1;
 			exit(1);
 			break;
@@ -482,11 +482,12 @@ void spawn_bg(struct command_data *data)
 			close(fallback_stdout);
 			fprintf(stderr, "\r%s:", data->arg_list[0]);
 			perror("");
-			printf("\r:");
+			printf("\r: ");
 			exit(1);
 			break;
 		default:
 			printf("background pid is %d\n", fork_ret);
+			fflush(stdout);
 			break;
 	}
 }

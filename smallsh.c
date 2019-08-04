@@ -92,7 +92,7 @@ int main()
 		//hits Ctrl-Z while a foreground process is running.
 		//Because the signal handler provides a colon of its own,
 		//this might be redundant.
-		printf("\r:");
+		printf("\r: ");
 		fflush(stdout);
 		getline(&input.input_buffer, &max_input, stdin);
 
