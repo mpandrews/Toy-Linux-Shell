@@ -14,13 +14,13 @@ void sigtstp_handler(int signal)
 	if (bg_permitted)
 	{
 		write(STDOUT_FILENO, "\nEntering foreground-only mode", 30);
-		write(STDOUT_FILENO, " (& is now ignored)\n:", 21);
+		write(STDOUT_FILENO, " (& is now ignored)\n: ", 22);
 		fsync(STDOUT_FILENO);
 		bg_permitted = 0;
 	}
 	else
 	{
-		write(STDOUT_FILENO, "\nExiting foreground-only mode\n:", 31);
+		write(STDOUT_FILENO, "\nExiting foreground-only mode\n: ", 32);
 		fsync(STDOUT_FILENO);
 		bg_permitted = 1;
 	}
