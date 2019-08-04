@@ -38,7 +38,7 @@ int main()
 	
 	struct sigaction int_action_struct;
 	sigemptyset(&int_action_struct.sa_mask);
-	int_action_struct.sa_flags = 0;
+	int_action_struct.sa_flags = SA_RESTART;
 	int_action_struct.sa_handler = SIG_IGN;
 	sigaction(SIGINT, &int_action_struct, NULL);
 
@@ -54,8 +54,23 @@ int main()
 	//in the first place.
 	setpgid(0, 0);
 
+	//Now that the group ID is set up, we can safely set up a one-shot
+	//SIGTERM handler to broadcast SIGTERM to the group.  The idea is to
+	//kill all the children, and then catch our own SIGTERM afterwards.
+	
+	struct sigaction sigterm_action_struct;
+	//We can ignore everything while we're in here: the point is to die
+	//anyway.
+	sigfillset(&sigterm_action_struct.sa_mask);
+	//It is absolutely crucial that we reset the handler to the default
+	//afterwards.
+	sigterm_action_struct.sa_flags = SA_RESTART | SA_RESETHAND;
 	//We'll give a stringified copy of the master PID to the input
 	//struct, which it will use for $$ expansion.
+	sigterm_action_struct.sa_handler = sigterm_handler;
+	sigaction(SIGTERM, &sigterm_action_struct, NULL);
+
+	//Stringify the pid.
 	sprintf(input.pid, "%d", (int) master_pid);
 
 	//The main prompt-execute loop.
@@ -102,12 +117,11 @@ int main()
 			 * a NULL pointer.
 			 */
 			free_expansion_links(&(input.expanded_args));
-			sigset_t term_mask;
-			sigemptyset(&term_mask);
-			sigaddset(&term_mask, SIGTERM);
-			sigprocmask(SIG_BLOCK, &term_mask, NULL);
-			kill(0, SIGTERM);
-			exit(0);
+			/* term_and_exit blocks SIGTERM, then sends it to the
+			 * entire process group, and finally exits.  This
+			 * is to ensure that any children are slain.
+			 */
+			 term_and_exit(0);
 		}
 		else if (!strcmp(input.arg_list[0], "cd"))
 		{
@@ -130,6 +144,10 @@ int main()
 		 */
 		else if (!input.fg && bg_permitted)
 		{
+			//It may seem odd that we're passing last_fg_status
+			//into the bg spawner, but that's because we want
+			//the status to be updated if exec fails.  If that
+			//doesn't happen, it will go unused.
 			spawn_bg(&input);
 		}
 		else

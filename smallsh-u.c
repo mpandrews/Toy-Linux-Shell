@@ -42,7 +42,7 @@ char* make_expansion_string(char* input, char* pid_str)
 	{
 		fprintf(stderr, "Error: make_expansion_string called");
 		fprintf(stderr, " on empty string!\n");
-		exit(1);
+		term_and_exit(1);
 	}
 	char* dollar_ptr = strstr(input, "$$");
 	
@@ -56,7 +56,7 @@ char* make_expansion_string(char* input, char* pid_str)
 		if (!return_str)
 		{
 			fprintf(stderr, "Malloc failure in $$ expansion.\n");
-			exit(1);
+			term_and_exit(1);
 		}
 		strcpy(return_str, input);
 		return return_str;
@@ -75,7 +75,7 @@ char* make_expansion_string(char* input, char* pid_str)
 		if (!return_str)
 		{
 			fprintf(stderr, "Malloc failure in $$ expansion.\n");
-			exit(1);
+			term_and_exit(1);
 		}
 		strcpy(return_str, input);
 		//Just copy replace the dollar signs directly.
@@ -91,7 +91,7 @@ char* make_expansion_string(char* input, char* pid_str)
 		if (!return_str)
 		{
 			fprintf(stderr, "Malloc failure in $$ expansion.");
-			exit(1);
+			term_and_exit(1);
 		}
 		strcpy(return_str, input);
 		//Shift everything left 1.
@@ -118,7 +118,7 @@ char* make_expansion_string(char* input, char* pid_str)
 	if (!return_str)
 	{
 		fprintf(stderr, "Malloc failure in $$ expansion.\n");
-		exit(1);
+		term_and_exit(1);
 	}
 	return_str[0] = '\0';
 	//Copy everything up to the first dollar sign:
@@ -142,7 +142,7 @@ char* make_expansion_string(char* input, char* pid_str)
 		{
 			fprintf(stderr, "Failure in reallocating $$ exp.");
 			fprintf(stderr, " string!\n");
-			exit(1);
+			term_and_exit(1);
 		}
 
 		//We need to re-verify the position of the $$ substring,
@@ -171,7 +171,7 @@ char* make_expansion_link(struct dollar_expansion_link **head,
 		{
 			fprintf(stderr, "Error malloc'ing new expansion ");
 			fprintf(stderr, " link list head!\n");
-			exit(1);
+			term_and_exit(1);
 		}
 		(*head)->next = NULL;
 		(*head)->value = NULL;
@@ -201,7 +201,7 @@ int parse_input(struct command_data *data)
 	if (!data->input_buffer)
 	{
 		fprintf(stderr, "parse_input called on null input buffer!\n");
-		exit(1);
+		term_and_exit(1);
 	}
 	//If we got an empty line or a comment line, we should return 1
 	//so that main knows not to try to execute anything.
@@ -324,6 +324,8 @@ void redirect_in(const char* source)
 		fprintf(stderr, "cannot open %s for input:",
 				source);
 		perror("");
+		//We won't call term_and_exit because this should only
+		//happen in the child, and we don't want to kill the parent.
 		exit(1);
 	}
 	dup2(in_descriptor, STDIN_FILENO);
@@ -355,7 +357,11 @@ void print_status(int *status)
 	fflush(stdout);
 }
 
-
+/* TODO: spawn_fg and spawn_bg contain a lot of duplicated code, and should
+ * probably be refactored into a single function when there's time.  They
+ * started out quite different from each other, but over time they kinda
+ * grew into almost-clones.
+ */
 
 void spawn_fg(struct command_data *data, int *status)
 {
@@ -382,7 +388,8 @@ void spawn_fg(struct command_data *data, int *status)
 	switch (fork_ret)
 	{
 		case -1:
-			perror("Forking failed");
+			perror("Forking failed!");
+			term_and_exit(1);
 			break;
 		case 0:
 			//foreground processes need to ignore TSTP, but
@@ -393,6 +400,7 @@ void spawn_fg(struct command_data *data, int *status)
 			sigaction(SIGINT, &child_int, NULL);
 			sigprocmask(SIG_SETMASK, &oldsigs, NULL);
 			//If redirection was specified, we'll set it up here.
+			int fallback_stdout = dup(STDOUT_FILENO);
 			if (data->input_file)
 				redirect_in(data->input_file);
 			if (data->output_file)
@@ -400,8 +408,17 @@ void spawn_fg(struct command_data *data, int *status)
 			//The actual execution!
 			execvp(data->arg_list[0], data->arg_list);
 			//Bad, bad things have happened if we're here.
-			fprintf(stderr, "%s: ", data->arg_list[0]);
+			
+			//First thing to do is restore stdout so that we
+			//can re-prompt.
+			dup2(fallback_stdout, STDOUT_FILENO);
+			close(fallback_stdout);
+			
+			//Now the error messages;
+			fprintf(stderr, "\r%s: ", data->arg_list[0]);
 			perror("");
+			printf("\r:");
+			*status = 1;
 			exit(1);
 			break;
 		default:
@@ -420,24 +437,30 @@ void spawn_fg(struct command_data *data, int *status)
 void spawn_bg(struct command_data *data)
 {
 	
-	//We'll create a sigaction struct that ignores its signal,
-	//so that we can use to ignore SIGINT and SIGTSTP in the child process.
-	struct sigaction child_handlers;
-	sigemptyset(&child_handlers.sa_mask);
-	child_handlers.sa_flags = SA_RESTART;
-	child_handlers.sa_handler = SIG_IGN;
+	//We'll create sigaction structs, so that we can use them to SIGTSTP 
+	//in the child process, then unignore
+	//SIGINT.
+	struct sigaction tstp_handler;
+	struct sigaction int_handler;
+	sigemptyset(&tstp_handler.sa_mask);
+	sigemptyset(&int_handler.sa_mask);
+	tstp_handler.sa_flags = int_handler.sa_flags = SA_RESTART;
+	tstp_handler.sa_handler = SIG_IGN;
+	int_handler.sa_handler = SIG_DFL;
+
 	
 	int fork_ret = fork();
 	switch (fork_ret)
 	{
 		case -1:
-			perror("Forking failed!:");
-			exit(1);
+			perror("Forking failed!");
+			term_and_exit(1);
 			break;
 		case 0:
-			sigaction(SIGTSTP, &child_handlers, NULL);
-			child_handlers.sa_handler = SIG_DFL;
-			sigaction(SIGINT, &child_handlers, NULL);
+			sigaction(SIGTSTP, &tstp_handler, NULL);
+			sigaction(SIGINT, &int_handler, NULL);
+			
+			int fallback_stdout = dup(STDOUT_FILENO);
 			if (data->input_file)
 			{
 				redirect_in(data->input_file);
@@ -455,12 +478,25 @@ void spawn_bg(struct command_data *data)
 				redirect_out("/dev/null");
 			}
 			execvp(data->arg_list[0], data->arg_list);
-			fprintf(stderr, "%s:", data->arg_list[0]);
+			dup2(fallback_stdout, STDOUT_FILENO);
+			close(fallback_stdout);
+			fprintf(stderr, "\r%s:", data->arg_list[0]);
 			perror("");
+			printf("\r:");
 			exit(1);
 			break;
 		default:
 			printf("background pid is %d\n", fork_ret);
 			break;
 	}
+}
+
+void term_and_exit(int exitcode)
+{
+	sigset_t term_mask;
+	sigemptyset(&term_mask);
+	sigaddset(&term_mask, SIGTERM);
+	sigprocmask(SIG_BLOCK, &term_mask, NULL);
+	kill(0, SIGTERM);
+	exit(exitcode);
 }

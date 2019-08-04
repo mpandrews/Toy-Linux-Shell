@@ -82,9 +82,20 @@ void spawn_bg(struct command_data*);
  * 	The argument passed in should ideally be the flag variable set by
  * 	wait() or waitpid().  I'm calling it undefined if you pass in, like, 6
  * 	or something.
- * Postdition:
- * 	None.  Side effect (print to stdout) only.
+ * Postcondition:
+ * 	status will be modified iff exec fails, but not otherwise.  Absent that,
+ * 	the program state is not modified.
  */
 void print_status(int*);
+
+/* term_and_exit: This will block SIGTERM, raise SIGTERM for the process group,
+ * and then call exit with the specified code.  This is just to make sure that
+ * we always murder our children before dying ourselves, which is of course
+ * the right and proper thing to do.
+ * Precondition: This should not be called before the shell has assigned itself
+ * a new process group, or it may do unwholesome things to its own ancestors.
+ * Postcondition: It will have made a desert and called it peace.
+ */
+void term_and_exit(int exitcode);
 
 #endif

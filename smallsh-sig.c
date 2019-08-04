@@ -25,3 +25,10 @@ void sigtstp_handler(int signal)
 		bg_permitted = 1;
 	}
 }
+
+void sigterm_handler(int signal)
+{
+	write(STDERR_FILENO, "SIGTERM received; rebroadcasting to children.\n",
+			46);
+	kill(0, SIGTERM);
+}
