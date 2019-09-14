@@ -1,1 +1,18 @@
 To compile: make
+
+Usage: When started, the shell creates its own process group, to which its children will also belong unless they also create
+their own groups. If the shell is killed via SIGTERM, it will rebroadcast it to its process group.  "exit" will also exit the shell,
+and cause SIGTERM to be sent to any child processes running.  "status" is a shell builtin that will report the exit status of the
+last child process to terminate.
+
+SIGINT is ignored by the shell, and by any processes being run in the background.  Foreground processes may or may not ignore it
+depending on their own default behavior; the shell does not modify it.  SIGTSTP (Ctrl-Z) will toggle the availability of background
+mode: e.g., if Ctrl-Z is pressed, any attempt to run a process in the background will result in that process being run in the
+foreground until Ctrl-Z is pressed again.
+
+General syntax: cmd [args...] [> output file] [< input file] [&]
+
+& if present must be the last argument to a command, and will cause the process invoked to spawn in the background unless 
+background mode is disabled.  Input and output redirection can be done in either order.  (e.g., "> foo < bar" and "< bar > foo" are
+both valid.)  There must be a space between the > or < and the filename.  Input redirection must be done after any arguments for the
+command itself.
